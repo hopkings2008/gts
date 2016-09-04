@@ -1,0 +1,59 @@
+package proxy
+
+import (
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+
+	log "github.com/Sirupsen/logrus"
+)
+
+type proxy struct {
+	*httputil.ReverseProxy
+	target  *url.URL
+	source  string
+	maxConn int
+	rps     int
+}
+
+func (p *proxy) dial(network, addr string) (net.Conn, error) {
+	fmt.Printf("dial %s:%s\n", network, addr)
+	c, err := dialer.Dial(network, addr)
+	return &netConn{c}, err
+}
+
+func (p *proxy) director(req *http.Request) {
+	req.URL.Scheme = p.target.Scheme
+	req.URL.Host = p.target.Host
+	if _, ok := req.Header["User-Agent"]; !ok {
+		req.Header.Set("User-Agent", "")
+	}
+	log.Infof("req: %v with host: %s, path: %s\n", req, req.URL.Host, req.URL.Path)
+}
+
+func (p *proxy) getSource() string {
+	return p.source
+}
+
+func newProxy(source, target string, maxConn, rps int) (*proxy, error) {
+	u, err := url.Parse(target)
+	if err != nil {
+		log.Errorf("Cannot parse %s, err: %v\n", target, err)
+		return nil, err
+	}
+	p := &proxy{
+		ReverseProxy: httputil.NewSingleHostReverseProxy(u),
+		target:       u,
+		source:       source,
+		maxConn:      maxConn,
+		rps:          rps,
+	}
+	p.Transport = &http.Transport{
+		Dial:              p.dial,
+		DisableKeepAlives: true,
+	}
+	p.Director = p.director
+	return p, nil
+}
