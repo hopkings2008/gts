@@ -1,60 +1,75 @@
 package proxy
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
+	"sync"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 )
 
-type limit struct {
-	maxConn int
-	rps     int
-}
-
 type proxy struct {
 	*httputil.ReverseProxy
 	routes  map[string]*url.URL //source to target
-	origins map[string]limit    //origin host to limit
+	origins map[string]*limit   //origin host to limit
 }
 
 func (p *proxy) dial(network, addr string) (net.Conn, error) {
-	fmt.Printf("dial %s:%s\n", network, addr)
+	if l, ok := p.origins[addr]; ok {
+		for !l.upConn() {
+			log.Infof("connection is max")
+			time.Sleep(100 * time.Millisecond)
+		}
+		log.Infof("dial %s:%s", network, addr)
+		c, err := dialer.Dial(network, addr)
+		return newNetConn(c, l), err
+	}
+	log.Infof("uncare host: %s", addr)
 	c, err := dialer.Dial(network, addr)
-	return &netConn{c}, err
+	if err != nil {
+		log.Errorf("Failed to dial %s, err: %v", addr, err)
+	}
+	return c, err
 }
 
 func (p *proxy) director(req *http.Request) {
-	log.Infof("ori req with host: %s, path: %s\n", req.URL.Host, req.URL.Path)
-	temp := fmt.Sprintf("http:/%s", req.URL.Path)
-	log.Infof("temp: %s", temp)
-	if u, err := url.Parse(temp); err != nil {
-		log.Infof("host: %s, path: %s", u.Host, u.Path)
-		if target, ok := p.routes[u.Host]; ok {
-			req.URL.Scheme = target.Scheme
-			req.URL.Host = target.Host
-			req.URL.Path = u.Path
-			if _, ok := req.Header["User-Agent"]; !ok {
-				req.Header.Set("User-Agent", "")
-			}
-			log.Infof("req with host: %s, path: %s\n", req.URL.Host, req.URL.Path)
+	host := ""
+	path := ""
+	if idx := strings.Index(req.URL.Path[1:], "/"); idx != -1 {
+		host = req.URL.Path[1 : idx+1]
+		path = req.URL.Path[idx+1:]
+	} else {
+		host = req.URL.Path
+	}
+	log.Infof("host: %s", host)
+	if target, ok := p.routes[host]; ok {
+		req.URL.Scheme = target.Scheme
+		req.URL.Host = target.Host
+		req.URL.Path = path
+		if _, ok := req.Header["User-Agent"]; !ok {
+			req.Header.Set("User-Agent", "")
 		}
+		log.Infof("req: %s", req.URL.String())
 	}
 }
 
-func (p *proxy) addOrigin(source, target string, maxConn, rps int) error {
+func (p *proxy) addOrigin(source, target string, maxConn, rps int32) error {
 	u, err := url.Parse(target)
 	if err != nil {
-		log.Errorf("Cannot parse %s, err: %v\n", target, err)
+		log.Errorf("Cannot parse %s, err: %v", target, err)
 		return err
 	}
 	p.routes[source] = u
-	p.origins[u.Host] = limit{
+	p.origins[u.Host] = &limit{
+		locker:  &sync.Mutex{},
 		maxConn: maxConn,
-		rps:     rps,
+		maxRps:  rps,
+		conn:    0,
+		rps:     0,
 	}
 	return nil
 }
@@ -65,9 +80,10 @@ func newProxy() *proxy {
 	p.Transport = &http.Transport{
 		Dial:              p.dial,
 		DisableKeepAlives: true,
+		Proxy:             http.ProxyFromEnvironment,
 	}
 	p.Director = p.director
 	p.routes = make(map[string]*url.URL)
-	p.origins = make(map[string]limit)
+	p.origins = make(map[string]*limit)
 	return p
 }
