@@ -33,10 +33,10 @@ func (p *proxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 func (p *proxy) dial(network, addr string) (net.Conn, error) {
 	if l, ok := p.origins[addr]; ok {
 		for !l.upConn() {
-			log.Infof("connection is max")
+			log.Debugf("connection is max")
 			time.Sleep(time.Duration(100) * time.Millisecond)
 		}
-		log.Infof("dial %s:%s", network, addr)
+		log.Debugf("dial %s:%s", network, addr)
 		c, err := dialer.Dial(network, addr)
 		return newNetConn(c, l), err
 	}
@@ -57,7 +57,7 @@ func (p *proxy) director(req *http.Request) {
 	} else {
 		host = req.URL.Path[1:]
 	}
-	log.Infof("host: %s", host)
+	log.Debugf("host: %s", host)
 	if target, ok := p.routes[host]; ok {
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
@@ -65,7 +65,7 @@ func (p *proxy) director(req *http.Request) {
 		if _, ok := req.Header["User-Agent"]; !ok {
 			req.Header.Set("User-Agent", "")
 		}
-		log.Infof("req: %s", req.URL.String())
+		log.Debugf("req: %s", req.URL.String())
 	}
 }
 
