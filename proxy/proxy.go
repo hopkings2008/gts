@@ -91,7 +91,7 @@ func newProxy() *proxy {
 	p.ReverseProxy = &httputil.ReverseProxy{}
 	p.Transport = &http.Transport{
 		Dial:              p.dial,
-		DisableKeepAlives: true,
+		DisableKeepAlives: false,
 		Proxy:             http.ProxyFromEnvironment,
 	}
 	p.Director = p.director

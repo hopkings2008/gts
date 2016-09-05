@@ -17,7 +17,7 @@ func (gts *GtsProxy) Run() {
 func NewGtsProxy(routes map[string]string) (*GtsProxy, error) {
 	gts := &GtsProxy{newProxy()}
 	for k, v := range routes {
-		if err := gts.proxy.addOrigin(k, v, 0, 0); err != nil {
+		if err := gts.proxy.addOrigin(k, v, 0, 60); err != nil {
 			log.Errorf("Failed to addOrigin(%s, %s)", k, v)
 			return nil, err
 		}
