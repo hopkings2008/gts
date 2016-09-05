@@ -26,7 +26,6 @@ func (ps *proxySuite) SetUpSuite(c *check.C) {
 	c.Assert(ps.origin, check.NotNil)
 	routes := make(map[string]string)
 	routes["test"] = ps.origin.URL
-	c.Logf("origin: %s", ps.origin.URL)
 	p, err := proxy.NewGtsProxy(routes)
 	c.Assert(err, check.IsNil)
 	ps.front = httptest.NewServer(p)
@@ -49,11 +48,8 @@ func (ps *proxySuite) TearDownTest(c *check.C) {
 }
 
 func (ps *proxySuite) TestBasicProxy(c *check.C) {
-	url := fmt.Sprintf("%s/test", ps.front.URL)
-	c.Logf("url: %s", url)
 	resp, err := http.Get(fmt.Sprintf("%s/test", ps.front.URL))
 	defer resp.Body.Close()
 	c.Assert(err, check.IsNil)
-	c.Logf("resp status: %d", resp.StatusCode)
 	c.Assert(resp.StatusCode < 300, check.Equals, true)
 }
