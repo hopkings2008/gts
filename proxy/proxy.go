@@ -18,11 +18,23 @@ type proxy struct {
 	origins map[string]*limit   //origin host to limit
 }
 
+func (p *proxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	if l, ok := p.origins[req.URL.Host]; ok {
+		for !l.upRps() {
+			time.Sleep(time.Duration(100) * time.Millisecond)
+		}
+		p.ReverseProxy.ServeHTTP(rw, req)
+		return
+	}
+
+	p.ReverseProxy.ServeHTTP(rw, req)
+}
+
 func (p *proxy) dial(network, addr string) (net.Conn, error) {
 	if l, ok := p.origins[addr]; ok {
 		for !l.upConn() {
 			log.Infof("connection is max")
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(time.Duration(100) * time.Millisecond)
 		}
 		log.Infof("dial %s:%s", network, addr)
 		c, err := dialer.Dial(network, addr)

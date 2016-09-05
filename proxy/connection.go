@@ -9,32 +9,58 @@ import (
 )
 
 type limit struct {
-	locker  *sync.Mutex
-	maxConn int32
-	maxRps  int32
-	conn    int32
-	rps     int32
+	locker   *sync.Mutex
+	maxConn  int32
+	maxRps   int32
+	conn     int32
+	rps      int32
+	rpsBegin *time.Time
 }
 
 func (l *limit) upConn() bool {
-	l.locker.Lock()
-	defer l.locker.Unlock()
 	if l.maxConn == 0 {
 		return true
 	}
+
+	l.locker.Lock()
+	defer l.locker.Unlock()
+	l.conn++
 	if l.conn <= l.maxConn {
-		l.conn++
 		return true
 	}
 	return false
 }
 
 func (l *limit) downConn() {
+	if l.maxConn == 0 {
+		return
+	}
 	l.locker.Lock()
 	defer l.locker.Unlock()
-	if l.maxConn != 0 {
-		l.conn--
+	l.conn--
+}
+
+func (l *limit) upRps() bool {
+	if l.maxRps == 0 {
+		return true
 	}
+	l.locker.Lock()
+	defer l.locker.Unlock()
+	if l.rpsBegin == nil {
+		now := time.Now()
+		l.rpsBegin = &now
+		l.rps++
+		if l.rps <= l.maxRps {
+			return true
+		}
+		return false
+	}
+	l.rps++
+	seconds := time.Since(*l.rpsBegin).Seconds()
+	if (int32(float64(l.rps) / seconds)) <= l.maxRps {
+		return true
+	}
+	return false
 }
 
 type netConn struct {
