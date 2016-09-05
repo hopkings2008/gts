@@ -55,7 +55,7 @@ func (p *proxy) director(req *http.Request) {
 		host = req.URL.Path[1 : idx+1]
 		path = req.URL.Path[idx+1:]
 	} else {
-		host = req.URL.Path
+		host = req.URL.Path[1:]
 	}
 	log.Infof("host: %s", host)
 	if target, ok := p.routes[host]; ok {
