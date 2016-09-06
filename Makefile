@@ -3,7 +3,7 @@
 GOFLAGS=-gcflags "-N -l"
 
 all:
-	go build $(GOFLAGS) -o gts
+	export CGO_ENABLED=0 && go build $(GOFLAGS) -o gts
 
 clean:
 	-@rm -f gts

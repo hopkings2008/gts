@@ -11,7 +11,7 @@ func main() {
 	m["weichat"] = &proxy.TargetInfo{
 		Target:  "http://mmsns.qpic.cn",
 		MaxConn: 0,
-		MaxRps:  0,
+		MaxRps:  60,
 	}
 	p, _ := proxy.NewGtsProxy(m)
 	p.Run()

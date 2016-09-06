@@ -22,13 +22,14 @@ func (p *proxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 func (p *proxy) dial(network, addr string) (net.Conn, error) {
-	if l, ok := p.origins[addr]; ok {
+	host := getHost(addr)
+	if l, ok := p.origins[host]; ok {
 		l.upConn()
 		log.Debugf("dial %s:%s", network, addr)
 		c, err := dialer.Dial(network, addr)
 		return newNetConn(c, l), err
 	}
-	log.Warnf("uncare host: %s", addr)
+	log.Warnf("Uncatched host: %s", host)
 	c, err := dialer.Dial(network, addr)
 	if err != nil {
 		log.Errorf("Failed to dial %s, err: %v", addr, err)
@@ -45,7 +46,6 @@ func (p *proxy) director(req *http.Request) {
 	} else {
 		host = req.URL.Path[1:]
 	}
-	log.Debugf("parse host: %s", host)
 	if target, ok := p.routes[host]; ok {
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
@@ -54,7 +54,8 @@ func (p *proxy) director(req *http.Request) {
 			req.Header.Set("User-Agent", "")
 		}
 		//check rps
-		if l, ok := p.origins[req.URL.Host]; ok {
+		h := getHost(req.URL.Host)
+		if l, ok := p.origins[h]; ok {
 			l.upRps()
 		}
 	}
@@ -67,8 +68,8 @@ func (p *proxy) addOrigin(source, target string, maxConn, rps int32) error {
 		return err
 	}
 	p.routes[source] = u
-	log.Debugf("source: %s, target: %s", source, u.Host)
-	p.origins[u.Host] = &limit{
+	host := getHost(u.Host)
+	p.origins[host] = &limit{
 		locker:  &sync.Mutex{},
 		maxConn: maxConn,
 		maxRps:  rps,
@@ -76,6 +77,13 @@ func (p *proxy) addOrigin(source, target string, maxConn, rps int32) error {
 		rps:     0,
 	}
 	return nil
+}
+
+func getHost(h string) string {
+	if idx := strings.Index(h, ":"); idx != -1 {
+		return h[:idx]
+	}
+	return h
 }
 
 func newProxy() *proxy {
