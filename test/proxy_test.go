@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/zouyu/gts/proxy"
@@ -20,7 +21,7 @@ type proxySuite struct {
 }
 
 func (ps *proxySuite) SetUpSuite(c *check.C) {
-	ps.origin = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	/*ps.origin = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "this call was relayed by the reverse proxy")
 	}))
 	c.Assert(ps.origin, check.NotNil)
@@ -29,7 +30,7 @@ func (ps *proxySuite) SetUpSuite(c *check.C) {
 	p, err := proxy.NewGtsProxy(routes)
 	c.Assert(err, check.IsNil)
 	ps.front = httptest.NewServer(p)
-	c.Assert(ps.front, check.NotNil)
+	c.Assert(ps.front, check.NotNil)*/
 }
 
 func (ps *proxySuite) TearDownSuite(c *check.C) {
@@ -52,4 +53,35 @@ func (ps *proxySuite) TestBasicProxy(c *check.C) {
 	defer resp.Body.Close()
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.StatusCode < 300, check.Equals, true)
+}
+
+func (ps *proxySuite) TestBasicRpsFunc(c *check.C) {
+	os := newOriginServer()
+	origin := httptest.NewServer(os)
+	c.Assert(origin, check.NotNil)
+	defer origin.Close()
+	routes := make(map[string]string)
+	routes["test"] = origin.URL
+	p, err := proxy.NewGtsProxy(routes)
+	c.Assert(err, check.IsNil)
+	front := httptest.NewServer(p)
+	c.Assert(front, check.NotNil)
+	defer front.Close()
+	var wg sync.WaitGroup
+	count := 10
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		go func() {
+			defer wg.Done()
+			resp, _ := http.Get(fmt.Sprintf("%s/test", front.URL))
+			if resp.Body != nil {
+				resp.Body.Close()
+			}
+			//c.Assert(err, check.IsNil)
+			//c.Assert(resp.StatusCode < 300, check.Equals, true)
+		}()
+	}
+	wg.Wait()
+	rps := os.rps()
+	c.Assert(rps, check.Equals, 1)
 }

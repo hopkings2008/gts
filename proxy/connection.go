@@ -17,18 +17,23 @@ type limit struct {
 	rpsBegin *time.Time
 }
 
-func (l *limit) upConn() bool {
+func (l *limit) upConn() {
 	if l.maxConn == 0 {
-		return true
+		return
 	}
 
 	l.locker.Lock()
-	defer l.locker.Unlock()
 	l.conn++
-	if l.conn <= l.maxConn {
-		return true
+	l.locker.Unlock()
+	for {
+		l.locker.Lock()
+		if l.conn <= l.maxConn {
+			l.locker.Unlock()
+			return
+		}
+		l.locker.Unlock()
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
-	return false
 }
 
 func (l *limit) downConn() {
@@ -46,21 +51,21 @@ func (l *limit) upRps() bool {
 	}
 	l.locker.Lock()
 	defer l.locker.Unlock()
+	l.rps++
 	if l.rpsBegin == nil {
 		now := time.Now()
 		l.rpsBegin = &now
-		l.rps++
 		if l.rps <= l.maxRps {
 			return true
 		}
-		return false
 	}
-	l.rps++
+	time.Sleep(time.Duration(100) * time.Millisecond)
 	seconds := time.Since(*l.rpsBegin).Seconds()
-	if (int32(float64(l.rps) / seconds)) <= l.maxRps {
-		return true
+	for int32(float64(l.rps)/seconds) > l.maxRps {
+		time.Sleep(time.Duration(100) * time.Millisecond)
+		seconds = time.Since(*l.rpsBegin).Seconds()
 	}
-	return false
+	return true
 }
 
 type netConn struct {
