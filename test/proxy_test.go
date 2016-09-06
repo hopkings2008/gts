@@ -49,7 +49,22 @@ func (ps *proxySuite) TearDownTest(c *check.C) {
 }
 
 func (ps *proxySuite) TestBasicProxy(c *check.C) {
-	resp, err := http.Get(fmt.Sprintf("%s/test", ps.front.URL))
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "this call was relayed by the reverse proxy")
+	}))
+	c.Assert(origin, check.NotNil)
+	defer origin.Close()
+	routes := make(map[string]*proxy.TargetInfo)
+	routes["test"] = &proxy.TargetInfo{
+		Target: origin.URL,
+	}
+	p, err := proxy.NewGtsProxy(routes)
+	c.Assert(err, check.IsNil)
+	front := httptest.NewServer(p)
+	c.Assert(front, check.NotNil)
+	defer front.Close()
+
+	resp, err := http.Get(fmt.Sprintf("%s/test", front.URL))
 	defer resp.Body.Close()
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.StatusCode < 300, check.Equals, true)
@@ -60,8 +75,12 @@ func (ps *proxySuite) TestBasicRpsFunc(c *check.C) {
 	origin := httptest.NewServer(os)
 	c.Assert(origin, check.NotNil)
 	defer origin.Close()
-	routes := make(map[string]string)
-	routes["test"] = origin.URL
+	routes := make(map[string]*proxy.TargetInfo)
+	routes["test"] = &proxy.TargetInfo{
+		Target:  origin.URL,
+		MaxConn: 0,
+		MaxRps:  1,
+	}
 	p, err := proxy.NewGtsProxy(routes)
 	c.Assert(err, check.IsNil)
 	front := httptest.NewServer(p)
@@ -77,8 +96,9 @@ func (ps *proxySuite) TestBasicRpsFunc(c *check.C) {
 			if resp.Body != nil {
 				resp.Body.Close()
 			}
-			//c.Assert(err, check.IsNil)
-			//c.Assert(resp.StatusCode < 300, check.Equals, true)
+			c.Assert(err, check.IsNil)
+			c.Assert(resp.StatusCode < 300, check.Equals, true)
+			c.Logf("got resp %d.", resp.StatusCode)
 		}()
 	}
 	wg.Wait()

@@ -57,7 +57,6 @@ func (p *proxy) director(req *http.Request) {
 		if l, ok := p.origins[req.URL.Host]; ok {
 			l.upRps()
 		}
-		log.Infof("req: %s", req.URL.String())
 	}
 }
 

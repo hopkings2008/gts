@@ -7,8 +7,12 @@ import (
 )
 
 func main() {
-	m := make(map[string]string)
-	m["weichat"] = "http://mmsns.qpic.cn"
+	m := make(map[string]*proxy.TargetInfo)
+	m["weichat"] = &proxy.TargetInfo{
+		Target:  "http://mmsns.qpic.cn",
+		MaxConn: 0,
+		MaxRps:  0,
+	}
 	p, _ := proxy.NewGtsProxy(m)
 	p.Run()
 }

@@ -75,7 +75,7 @@ type netConn struct {
 
 func (c *netConn) Close() error {
 	c.limit.downConn()
-	log.Infof("Close %s %s", c.Conn.RemoteAddr().Network(), c.Conn.RemoteAddr().String())
+	log.Debugf("Close %s %s", c.Conn.RemoteAddr().Network(), c.Conn.RemoteAddr().String())
 	return c.Conn.Close()
 }
 
