@@ -70,6 +70,35 @@ func (ps *proxySuite) TestBasicProxy(c *check.C) {
 	c.Assert(resp.StatusCode < 300, check.Equals, true)
 }
 
+func (ps *proxySuite) TestBasicWhiteListFunc(c *check.C) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "this call was relayed by the reverse proxy")
+	}))
+	c.Assert(origin, check.NotNil)
+	defer origin.Close()
+	routes := make(map[string]*proxy.TargetInfo)
+	routes["test"] = &proxy.TargetInfo{
+		Target: origin.URL,
+	}
+	p, err := proxy.NewGtsProxy(routes)
+	c.Assert(err, check.IsNil)
+	p.AddIps("127.0.0.2")
+	front := httptest.NewServer(p)
+	c.Assert(front, check.NotNil)
+	defer front.Close()
+
+	resp, err := http.Get(fmt.Sprintf("%s/test", front.URL))
+	resp.Body.Close()
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.StatusCode, check.Equals, http.StatusForbidden)
+
+	p.AddIps("127.0.0.1")
+	resp, err = http.Get(fmt.Sprintf("%s/test", front.URL))
+	resp.Body.Close()
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.StatusCode, check.Equals, http.StatusOK)
+}
+
 func (ps *proxySuite) TestBasicRpsFunc(c *check.C) {
 	os := newOriginServer()
 	origin := httptest.NewServer(os)
@@ -104,4 +133,38 @@ func (ps *proxySuite) TestBasicRpsFunc(c *check.C) {
 	wg.Wait()
 	rps := os.rps()
 	c.Assert(rps <= float64(1), check.Equals, true)
+}
+
+func (ps *proxySuite) TestBasicConnLimitFunc(c *check.C) {
+	os := newOriginServer()
+	origin := httptest.NewServer(os)
+	c.Assert(origin, check.NotNil)
+	defer origin.Close()
+	routes := make(map[string]*proxy.TargetInfo)
+	routes["test"] = &proxy.TargetInfo{
+		Target:  origin.URL,
+		MaxConn: 1,
+		MaxRps:  4,
+	}
+	p, err := proxy.NewGtsProxy(routes)
+	c.Assert(err, check.IsNil)
+	front := httptest.NewServer(p)
+	c.Assert(front, check.NotNil)
+	defer front.Close()
+	var wg sync.WaitGroup
+	count := 10
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		go func() {
+			defer wg.Done()
+			resp, _ := http.Get(fmt.Sprintf("%s/test", front.URL))
+			if resp.Body != nil {
+				resp.Body.Close()
+			}
+			c.Assert(err, check.IsNil)
+			c.Assert(resp.StatusCode < 300, check.Equals, true)
+			c.Logf("got resp %d.", resp.StatusCode)
+		}()
+	}
+	wg.Wait()
 }

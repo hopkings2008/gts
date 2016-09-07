@@ -22,17 +22,15 @@ func (l *limit) upConn() {
 		return
 	}
 
-	l.locker.Lock()
-	l.conn++
-	l.locker.Unlock()
 	for {
 		l.locker.Lock()
-		if l.conn <= l.maxConn {
+		if l.conn < l.maxConn {
+			l.conn++
 			l.locker.Unlock()
 			return
 		}
 		l.locker.Unlock()
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(10) * time.Millisecond)
 	}
 }
 

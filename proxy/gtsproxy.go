@@ -18,7 +18,11 @@ type GtsProxy struct {
 
 func (gts *GtsProxy) Run() {
 	http.Handle("/", gts)
-	log.Fatalf("Failed to start GTS with error: %v", http.ListenAndServe("127.0.0.1:9999", nil))
+	log.Fatalf("Failed to start GTS with error: %v", http.ListenAndServe(":9999", nil))
+}
+
+func (gts *GtsProxy) AddIps(ips ...string) {
+	gts.proxy.setWhiteList(ips)
 }
 
 func NewGtsProxy(routes map[string]*TargetInfo) (*GtsProxy, error) {

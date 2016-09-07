@@ -13,12 +13,29 @@ import (
 
 type proxy struct {
 	*httputil.ReverseProxy
-	routes  map[string]*url.URL //source to target
-	origins map[string]*limit   //origin host to limit
+	routes    map[string]*url.URL //source to target
+	origins   map[string]*limit   //origin host to limit
+	whitelist map[string]struct{}
 }
 
 func (p *proxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	if len(p.whitelist) != 0 {
+		ipstr, _, _ := net.SplitHostPort(req.RemoteAddr)
+		ip := net.ParseIP(ipstr)
+		if _, ok := p.whitelist[string(ip)]; !ok {
+			log.Warnf("ip: %s is not permitted.", req.RemoteAddr)
+			rw.WriteHeader(http.StatusForbidden)
+			return
+		}
+	}
 	p.ReverseProxy.ServeHTTP(rw, req)
+}
+
+func (p *proxy) setWhiteList(ips []string) {
+	for _, s := range ips {
+		ip := net.ParseIP(s)
+		p.whitelist[string(ip)] = struct{}{}
+	}
 }
 
 func (p *proxy) dial(network, addr string) (net.Conn, error) {
@@ -97,5 +114,6 @@ func newProxy() *proxy {
 	p.Director = p.director
 	p.routes = make(map[string]*url.URL)
 	p.origins = make(map[string]*limit)
+	p.whitelist = make(map[string]struct{})
 	return p
 }
