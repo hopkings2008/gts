@@ -59,10 +59,10 @@ func (l *limit) upRps() bool {
 			return true
 		}
 	}
-	time.Sleep(time.Duration(100) * time.Millisecond)
+	time.Sleep(time.Duration(10) * time.Millisecond)
 	seconds := time.Since(*l.rpsBegin).Seconds()
-	for int32(float64(l.rps)/seconds) > l.maxRps {
-		time.Sleep(time.Duration(100) * time.Millisecond)
+	for float64(l.rps)/seconds > float64(l.maxRps) {
+		time.Sleep(time.Duration(10) * time.Millisecond)
 		seconds = time.Since(*l.rpsBegin).Seconds()
 	}
 	return true

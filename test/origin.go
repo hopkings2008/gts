@@ -24,13 +24,13 @@ func (os *originServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "this call was relayed by the reverse proxy.\n")
 }
 
-func (os *originServer) rps() int {
+func (os *originServer) rps() float64 {
 	os.locker.Lock()
 	defer os.locker.Unlock()
 	if duration := time.Since(*os.start).Seconds(); duration != float64(0) {
-		return int(float64(os.reqCount) / duration)
+		return float64(os.reqCount) / duration
 	} else {
-		return os.reqCount
+		return float64(os.reqCount)
 	}
 }
 

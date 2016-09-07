@@ -50,9 +50,9 @@ func (p *proxy) director(req *http.Request) {
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
 		req.URL.Path = path
-		if _, ok := req.Header["User-Agent"]; !ok {
+		/*if _, ok := req.Header["User-Agent"]; !ok {
 			req.Header.Set("User-Agent", "")
-		}
+		}*/
 		//check rps
 		h := getHost(req.URL.Host)
 		if l, ok := p.origins[h]; ok {
