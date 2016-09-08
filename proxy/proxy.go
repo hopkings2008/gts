@@ -67,6 +67,7 @@ func (p *proxy) director(req *http.Request) {
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
 		req.URL.Path = path
+		req.Host = target.Host
 		/*if _, ok := req.Header["User-Agent"]; !ok {
 			req.Header.Set("User-Agent", "")
 		}*/
