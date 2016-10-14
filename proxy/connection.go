@@ -30,6 +30,7 @@ func (l *limit) upConn() {
 			return
 		}
 		l.locker.Unlock()
+		log.Infof("maxConn: %d, conn: %d", l.maxConn, l.conn)
 		time.Sleep(time.Duration(10) * time.Millisecond)
 	}
 }
@@ -60,6 +61,7 @@ func (l *limit) upRps() bool {
 	time.Sleep(time.Duration(10) * time.Millisecond)
 	seconds := time.Since(*l.rpsBegin).Seconds()
 	for float64(l.rps)/seconds > float64(l.maxRps) {
+		log.Infof("wait maxRps: %d, rps: %d", l.maxRps, l.rps)
 		time.Sleep(time.Duration(10) * time.Millisecond)
 		seconds = time.Since(*l.rpsBegin).Seconds()
 	}
@@ -72,9 +74,13 @@ type netConn struct {
 }
 
 func (c *netConn) Close() error {
-	c.limit.downConn()
-	log.Debugf("Close %s %s", c.Conn.RemoteAddr().Network(), c.Conn.RemoteAddr().String())
-	return c.Conn.Close()
+	err := c.Conn.Close()
+	if err == nil {
+		c.limit.downConn()
+		log.Debugf("Close %s %s", c.Conn.RemoteAddr().Network(), c.Conn.RemoteAddr().String())
+		return nil
+	}
+	return err
 }
 
 func newNetConn(c net.Conn, l *limit) *netConn {
