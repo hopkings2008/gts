@@ -61,7 +61,7 @@ func (l *limit) upRps() bool {
 	time.Sleep(time.Duration(10) * time.Millisecond)
 	seconds := time.Since(*l.rpsBegin).Seconds()
 	for float64(l.rps)/seconds > float64(l.maxRps) {
-		log.Infof("wait maxRps: %d, rps: %d", l.maxRps, l.rps)
+		log.Infof("wait maxRps: %d, rps: %f", l.maxRps, float64(l.rps)/seconds)
 		time.Sleep(time.Duration(10) * time.Millisecond)
 		seconds = time.Since(*l.rpsBegin).Seconds()
 	}

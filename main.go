@@ -2,11 +2,21 @@ package main
 
 import (
 	//"fmt"
+	"os"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/zouyu/gts/proxy"
 )
 
+//var log = logrus.New()
+
 func main() {
+	logfile := "log.log"
+	if logf, err := os.OpenFile(logfile, os.O_WRONLY|os.O_CREATE, 0755); err == nil {
+		logrus.SetOutput(logf)
+		logrus.SetLevel(logrus.DebugLevel)
+		logrus.SetFormatter(&logrus.TextFormatter{DisableColors: true})
+	}
 	m := make(map[string]*proxy.TargetInfo)
 	m["weichat"] = &proxy.TargetInfo{
 		Target:  "http://mmsns.qpic.cn",
