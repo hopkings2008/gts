@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -108,9 +109,11 @@ func newProxy() *proxy {
 	p := &proxy{}
 	p.ReverseProxy = &httputil.ReverseProxy{}
 	p.Transport = &http.Transport{
-		Dial:              p.dial,
-		DisableKeepAlives: false,
-		Proxy:             http.ProxyFromEnvironment,
+		Dial:                  p.dial,
+		DisableKeepAlives:     false,
+		Proxy:                 http.ProxyFromEnvironment,
+		IdleConnTimeout:       time.Duration(5) * time.Second,
+		ResponseHeaderTimeout: time.Duration(10) * time.Second,
 	}
 	p.Director = p.director
 	p.routes = make(map[string]*url.URL)
