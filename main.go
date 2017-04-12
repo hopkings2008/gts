@@ -18,8 +18,13 @@ func main() {
 		logrus.SetFormatter(&logrus.TextFormatter{DisableColors: true})
 	}
 	m := make(map[string]*proxy.TargetInfo)
-	m["weichat"] = &proxy.TargetInfo{
+	m["wechat"] = &proxy.TargetInfo{
 		Target:  "http://mmsns.qpic.cn",
+		MaxConn: 0,
+		MaxRps:  80,
+	}
+	m["wechat2"] = &proxy.TargetInfo{
+		Target:  "http://shmmsns.qpic.cn",
 		MaxConn: 0,
 		MaxRps:  80,
 	}
