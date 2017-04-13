@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -11,6 +13,10 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 )
+
+type ReqUrl struct {
+	Url string `json:"url"`
+}
 
 type proxy struct {
 	*httputil.ReverseProxy
@@ -41,7 +47,7 @@ func (p *proxy) setWhiteList(ips []string) {
 
 func (p *proxy) dial(network, addr string) (net.Conn, error) {
 	host := getHost(addr)
-	if l, ok := p.origins[host]; ok {
+	if l, ok := p.origins["www.shiqichuban.com"]; ok {
 		l.upConn()
 		log.Debugf("dial %s:%s", network, addr)
 		c, err := dialer.Dial(network, addr)
@@ -65,6 +71,34 @@ func (p *proxy) director(req *http.Request) {
 		host = req.URL.Path[1:]
 	}
 	if target, ok := p.routes[host]; ok {
+		if "limit" == host {
+			//defer req.Body.Close()
+			body, err := ioutil.ReadAll(req.Body)
+			if err != nil {
+				return
+			}
+			ru := ReqUrl{}
+			err = json.Unmarshal(body, &ru)
+			if err != nil {
+				return
+			}
+			u, err := url.Parse(ru.Url)
+			if err != nil {
+				return
+			}
+			req.Method = "GET"
+			req.URL.Scheme = u.Scheme
+			req.URL.Host = u.Host
+			req.URL.Path = u.Path
+			req.Host = u.Host
+			req.Header.Del("Content-Length")
+			req.Header.Set("Content-Type", "")
+			req.ContentLength = 0
+			if l, ok := p.origins["www.shiqichuban.com"]; ok {
+				l.upRps()
+			}
+			return
+		}
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
 		req.URL.Path = path
