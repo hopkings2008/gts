@@ -25,14 +25,14 @@ func (gts *GtsProxy) AddIps(ips ...string) {
 	gts.proxy.setWhiteList(ips)
 }
 
-func NewGtsProxy(routes map[string]*TargetInfo) (*GtsProxy, error) {
-	gts := &GtsProxy{newProxy()}
-	for k, v := range routes {
+func NewGtsProxy(maxConn, maxRps int32) (*GtsProxy, error) {
+	gts := &GtsProxy{newProxy(maxConn, maxRps)}
+	/*for k, v := range routes {
 		if err := gts.proxy.addOrigin(k, v.Target, v.MaxConn, v.MaxRps); err != nil {
 			log.Errorf("Failed to addOrigin(%s, %s)", k, v)
 			return nil, err
 		}
 		log.Infof("succeed to add route: %s %s", k, v)
-	}
+	}*/
 	return gts, nil
 }

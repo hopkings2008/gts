@@ -23,6 +23,8 @@ type proxy struct {
 	routes    map[string]*url.URL //source to target
 	origins   map[string]*limit   //origin host to limit
 	whitelist map[string]struct{}
+	maxConn   int32
+	maxRps    int32
 }
 
 func (p *proxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
@@ -47,7 +49,7 @@ func (p *proxy) setWhiteList(ips []string) {
 
 func (p *proxy) dial(network, addr string) (net.Conn, error) {
 	host := getHost(addr)
-	if l, ok := p.origins["www.shiqichuban.com"]; ok {
+	if l, ok := p.origins[host]; ok {
 		l.upConn()
 		log.Infof("dial %s:%s", network, addr)
 		c, err := dialer.Dial(network, addr)
@@ -56,12 +58,22 @@ func (p *proxy) dial(network, addr string) (net.Conn, error) {
 		}
 		return newNetConn(c, l), err
 	}
-	log.Warnf("Uncatched host: %s", host)
+	l := &limit{
+		locker:  &sync.Mutex{},
+		maxConn: 0,
+		maxRps:  80,
+		conn:    0,
+		rps:     0,
+	}
+	p.origins[host] = l
+	l.upConn()
+	log.Infof("dial %s:%s", network, addr)
+
 	c, err := dialer.Dial(network, addr)
 	if err != nil {
 		log.Errorf("Failed to dial %s, err: %v", addr, err)
 	}
-	return c, err
+	return newNetConn(c, l), err
 }
 
 func (p *proxy) resp(resp *http.Response) error {
@@ -71,57 +83,50 @@ func (p *proxy) resp(resp *http.Response) error {
 
 func (p *proxy) director(req *http.Request) {
 	host := ""
-	path := ""
 	if idx := strings.Index(req.URL.Path[1:], "/"); idx != -1 {
 		host = req.URL.Path[1 : idx+1]
-		path = req.URL.Path[idx+1:]
 	} else {
 		host = req.URL.Path[1:]
 	}
-	if target, ok := p.routes[host]; ok {
-		if "limit" == host {
-			//defer req.Body.Close()
-			body, err := ioutil.ReadAll(req.Body)
-			if err != nil {
-				log.Errorf("got invalid req, cannot read body.")
-				return
-			}
-			ru := ReqUrl{}
-			err = json.Unmarshal(body, &ru)
-			if err != nil {
-				log.Errorf("got invalid req %v", body)
-				return
-			}
-			u, err := url.Parse(ru.Url)
-			if err != nil {
-				log.Errorf("failed to parse req %s", ru.Url)
-				return
-			}
-			req.Method = "GET"
-			req.URL.Scheme = u.Scheme
-			req.URL.Host = u.Host
-			req.URL.Path = u.Path
-			req.Host = u.Host
-			req.Header.Set("Content-Type", "")
-			req.ContentLength = 0
-			if l, ok := p.origins["www.shiqichuban.com"]; ok {
-				l.upRps()
-			}
-			return
-		}
-		req.URL.Scheme = target.Scheme
-		req.URL.Host = target.Host
-		req.URL.Path = path
-		req.Host = target.Host
-		/*if _, ok := req.Header["User-Agent"]; !ok {
-			req.Header.Set("User-Agent", "")
-		}*/
-		//check rps
-		h := getHost(req.URL.Host)
-		if l, ok := p.origins[h]; ok {
-			l.upRps()
-		}
+	//defer req.Body.Close()
+	body, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Errorf("got invalid req, cannot read body.")
+		return
 	}
+	log.Infof("got req: %v, body: %s", req, string(body))
+	ru := ReqUrl{}
+	err = json.Unmarshal(body, &ru)
+	if err != nil {
+		log.Errorf("got invalid req %v", body)
+		return
+	}
+	u, err := url.Parse(ru.Url)
+	if err != nil {
+		log.Errorf("failed to parse req %s", ru.Url)
+		return
+	}
+	req.Method = "GET"
+	req.URL.Scheme = u.Scheme
+	req.URL.Host = u.Host
+	req.URL.Path = u.Path
+	req.Host = u.Host
+	req.Header.Set("Content-Type", "")
+	req.ContentLength = 0
+	if l, ok := p.origins[host]; ok {
+		l.upRps()
+	} else {
+		l := &limit{
+			locker:  &sync.Mutex{},
+			maxConn: p.maxConn,
+			maxRps:  p.maxRps,
+			conn:    0,
+			rps:     0,
+		}
+		p.origins[host] = l
+		l.upRps()
+	}
+	return
 }
 
 func (p *proxy) addOrigin(source, target string, maxConn, rps int32) error {
@@ -149,7 +154,7 @@ func getHost(h string) string {
 	return h
 }
 
-func newProxy() *proxy {
+func newProxy(maxConn, maxRps int32) *proxy {
 	p := &proxy{}
 	p.ReverseProxy = &httputil.ReverseProxy{}
 	p.Transport = &http.Transport{
@@ -160,9 +165,12 @@ func newProxy() *proxy {
 		ResponseHeaderTimeout: time.Duration(300) * time.Second,
 	}
 	p.Director = p.director
+	p.ModifyResponse = p.resp
 	//p.ModifyResponse = p.resp
 	p.routes = make(map[string]*url.URL)
 	p.origins = make(map[string]*limit)
 	p.whitelist = make(map[string]struct{})
+	p.maxConn = maxConn
+	p.maxRps = maxRps
 	return p
 }

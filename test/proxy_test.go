@@ -60,13 +60,7 @@ func (ps *proxySuite) TestBasicProxy(c *check.C) {
 	}))
 	c.Assert(origin, check.NotNil)
 	defer origin.Close()
-	routes := make(map[string]*proxy.TargetInfo)
-	routes["limit"] = &proxy.TargetInfo{
-		Target:  "http://www.shiqichuban.com", //origin.URL,
-		MaxConn: 0,
-		MaxRps:  80,
-	}
-	p, err := proxy.NewGtsProxy(routes)
+	p, err := proxy.NewGtsProxy(0, 80)
 	c.Assert(err, check.IsNil)
 	front := httptest.NewServer(p)
 	c.Assert(front, check.NotNil)
@@ -90,11 +84,8 @@ func (ps *proxySuite) TestBasicWhiteListFunc(c *check.C) {
 	}))
 	c.Assert(origin, check.NotNil)
 	defer origin.Close()
-	routes := make(map[string]*proxy.TargetInfo)
-	routes["test"] = &proxy.TargetInfo{
-		Target: origin.URL,
-	}
-	p, err := proxy.NewGtsProxy(routes)
+
+	p, err := proxy.NewGtsProxy(0, 80)
 	c.Assert(err, check.IsNil)
 	p.AddIps("127.0.0.2")
 	front := httptest.NewServer(p)
@@ -117,13 +108,7 @@ func (ps *proxySuite) TestBasicRpsFunc(c *check.C) {
 	origin := httptest.NewServer(os)
 	c.Assert(origin, check.NotNil)
 	defer origin.Close()
-	routes := make(map[string]*proxy.TargetInfo)
-	routes["limit"] = &proxy.TargetInfo{
-		Target:  "http://www.shiqichuban.com", //origin.URL,
-		MaxConn: 0,
-		MaxRps:  1,
-	}
-	p, err := proxy.NewGtsProxy(routes)
+	p, err := proxy.NewGtsProxy(0, 1)
 	c.Assert(err, check.IsNil)
 	front := httptest.NewServer(p)
 	c.Assert(front, check.NotNil)
@@ -158,13 +143,8 @@ func (ps *proxySuite) TestBasicConnLimitFunc(c *check.C) {
 	origin := httptest.NewServer(os)
 	c.Assert(origin, check.NotNil)
 	defer origin.Close()
-	routes := make(map[string]*proxy.TargetInfo)
-	routes["test"] = &proxy.TargetInfo{
-		Target:  origin.URL,
-		MaxConn: 1,
-		MaxRps:  4,
-	}
-	p, err := proxy.NewGtsProxy(routes)
+
+	p, err := proxy.NewGtsProxy(1, 4)
 	c.Assert(err, check.IsNil)
 	front := httptest.NewServer(p)
 	c.Assert(front, check.NotNil)
