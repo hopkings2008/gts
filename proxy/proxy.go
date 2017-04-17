@@ -49,8 +49,11 @@ func (p *proxy) dial(network, addr string) (net.Conn, error) {
 	host := getHost(addr)
 	if l, ok := p.origins["www.shiqichuban.com"]; ok {
 		l.upConn()
-		log.Debugf("dial %s:%s", network, addr)
+		log.Infof("dial %s:%s", network, addr)
 		c, err := dialer.Dial(network, addr)
+		if err != nil {
+			log.Errorf("failed to dial %s, err: %v", addr, err)
+		}
 		return newNetConn(c, l), err
 	}
 	log.Warnf("Uncatched host: %s", host)
@@ -59,6 +62,11 @@ func (p *proxy) dial(network, addr string) (net.Conn, error) {
 		log.Errorf("Failed to dial %s, err: %v", addr, err)
 	}
 	return c, err
+}
+
+func (p *proxy) resp(resp *http.Response) error {
+	log.Infof("got resp %v", resp)
+	return nil
 }
 
 func (p *proxy) director(req *http.Request) {
@@ -75,15 +83,18 @@ func (p *proxy) director(req *http.Request) {
 			//defer req.Body.Close()
 			body, err := ioutil.ReadAll(req.Body)
 			if err != nil {
+				log.Errorf("got invalid req, cannot read body.")
 				return
 			}
 			ru := ReqUrl{}
 			err = json.Unmarshal(body, &ru)
 			if err != nil {
+				log.Errorf("got invalid req %v", body)
 				return
 			}
 			u, err := url.Parse(ru.Url)
 			if err != nil {
+				log.Errorf("failed to parse req %s", ru.Url)
 				return
 			}
 			req.Method = "GET"
@@ -91,7 +102,6 @@ func (p *proxy) director(req *http.Request) {
 			req.URL.Host = u.Host
 			req.URL.Path = u.Path
 			req.Host = u.Host
-			req.Header.Del("Content-Length")
 			req.Header.Set("Content-Type", "")
 			req.ContentLength = 0
 			if l, ok := p.origins["www.shiqichuban.com"]; ok {
@@ -146,10 +156,11 @@ func newProxy() *proxy {
 		Dial:                  p.dial,
 		DisableKeepAlives:     false,
 		Proxy:                 http.ProxyFromEnvironment,
-		IdleConnTimeout:       time.Duration(5) * time.Second,
-		ResponseHeaderTimeout: time.Duration(10) * time.Second,
+		IdleConnTimeout:       time.Duration(300) * time.Second,
+		ResponseHeaderTimeout: time.Duration(300) * time.Second,
 	}
 	p.Director = p.director
+	//p.ModifyResponse = p.resp
 	p.routes = make(map[string]*url.URL)
 	p.origins = make(map[string]*limit)
 	p.whitelist = make(map[string]struct{})

@@ -1,6 +1,8 @@
 package test
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +16,10 @@ import (
 func Test(t *testing.T) { check.TestingT(t) }
 
 var _ = check.Suite(&proxySuite{})
+
+type ReqUrl struct {
+	Url string `json:"url"`
+}
 
 type proxySuite struct {
 	origin *httptest.Server
@@ -55,8 +61,10 @@ func (ps *proxySuite) TestBasicProxy(c *check.C) {
 	c.Assert(origin, check.NotNil)
 	defer origin.Close()
 	routes := make(map[string]*proxy.TargetInfo)
-	routes["test"] = &proxy.TargetInfo{
-		Target: origin.URL,
+	routes["limit"] = &proxy.TargetInfo{
+		Target:  "http://www.shiqichuban.com", //origin.URL,
+		MaxConn: 0,
+		MaxRps:  80,
 	}
 	p, err := proxy.NewGtsProxy(routes)
 	c.Assert(err, check.IsNil)
@@ -64,7 +72,13 @@ func (ps *proxySuite) TestBasicProxy(c *check.C) {
 	c.Assert(front, check.NotNil)
 	defer front.Close()
 
-	resp, err := http.Get(fmt.Sprintf("%s/test", front.URL))
+	url := ReqUrl{
+		Url: origin.URL,
+	}
+	b, _ := json.Marshal(&url)
+	br := bytes.NewReader(b)
+	resp, _ := http.Post(fmt.Sprintf("%s/limit", front.URL), "application/json", br)
+	//resp, err := http.Get(fmt.Sprintf("%s/limit", front.URL))
 	defer resp.Body.Close()
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.StatusCode < 300, check.Equals, true)
@@ -85,7 +99,6 @@ func (ps *proxySuite) TestBasicWhiteListFunc(c *check.C) {
 	p.AddIps("127.0.0.2")
 	front := httptest.NewServer(p)
 	c.Assert(front, check.NotNil)
-	defer front.Close()
 
 	resp, err := http.Get(fmt.Sprintf("%s/test", front.URL))
 	resp.Body.Close()
@@ -105,8 +118,8 @@ func (ps *proxySuite) TestBasicRpsFunc(c *check.C) {
 	c.Assert(origin, check.NotNil)
 	defer origin.Close()
 	routes := make(map[string]*proxy.TargetInfo)
-	routes["test"] = &proxy.TargetInfo{
-		Target:  origin.URL,
+	routes["limit"] = &proxy.TargetInfo{
+		Target:  "http://www.shiqichuban.com", //origin.URL,
 		MaxConn: 0,
 		MaxRps:  1,
 	}
@@ -121,13 +134,18 @@ func (ps *proxySuite) TestBasicRpsFunc(c *check.C) {
 	for i := 0; i < count; i++ {
 		go func() {
 			defer wg.Done()
-			resp, _ := http.Get(fmt.Sprintf("%s/test", front.URL))
+			url := ReqUrl{
+				Url: origin.URL,
+			}
+			b, _ := json.Marshal(&url)
+			br := bytes.NewReader(b)
+			resp, _ := http.Post(fmt.Sprintf("%s/limit", front.URL), "application/json", br)
 			if resp.Body != nil {
 				resp.Body.Close()
 			}
+			c.Logf("got resp %v", resp)
 			c.Assert(err, check.IsNil)
 			c.Assert(resp.StatusCode < 300, check.Equals, true)
-			c.Logf("got resp %d.", resp.StatusCode)
 		}()
 	}
 	wg.Wait()

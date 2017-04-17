@@ -91,6 +91,6 @@ func newNetConn(c net.Conn, l *limit) *netConn {
 }
 
 var dialer = &net.Dialer{
-	Timeout:   30 * time.Second,
+	Timeout:   300 * time.Second,
 	KeepAlive: 0,
 }
